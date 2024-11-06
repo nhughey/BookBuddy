@@ -38,51 +38,50 @@ userRouter.get("/me", requireUser, async (req, res, next) => {
   } catch (err) {}
 });
 
-// POST request to {baseUrl}/api/users/register
 userRouter.post("/register", async (req, res, next) => {
   const { firstname, lastname, email, password } = req.body;
-  if (!email) {
-    next({ name: "EmailRequiredError", message: "Email not provided!" });
-    return;
-  }
-  if (!password) {
-    next({ name: "PasswordRequiredError", message: "Password not provided!" });
-    return;
-
-    // do something here
-  }
+  
   try {
-    const existingUser = await getUserByEmail(email);
-    if (existingUser) {
-      next({
-        name: "ExistingUserError",
-        message: "user already registered with that email",
+    if (!email || !password) {
+      res.status(400).send({
+        name: "MissingCredentialsError",
+        message: "All fields are required"
       });
       return;
     }
-    const result = await createUser(req.body);
-    if (result) {
-      const token = jwt.sign({ id: result.id, email }, process.env.JWT_SECRET, {
-        expiresIn: "1w",
+
+    const existingUser = await getUserByEmail(email);
+    if (existingUser) {
+      res.status(400).send({
+        name: "UserExistsError",
+        message: "A user with that email already exists"
       });
-      console.log(token);
+      return;
+    }
+
+    const user = await createUser({ firstname, lastname, email, password });
+    if (user) {
+      const token = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: "1w" }
+      );
+
       res.send({
-        mesage: "Registration Successful!",
+        message: "Registration Successful!",
         token,
         user: {
-          id: result.id,
-          firstname: result.firstname,
-          lastname: result.lastname,
-          email: result.email,
+          id: user.id,
+          firstname: user.firstname,
+          lastname: user.lastname,
+          email: user.email,
         },
       });
-      return;
     } else {
-      next({
+      res.status(500).send({
         name: "RegistrationError",
-        message: "error registering, try later",
+        message: "Error registering user",
       });
-      return;
     }
   } catch (err) {
     next(err);
